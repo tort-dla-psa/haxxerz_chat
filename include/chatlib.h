@@ -12,15 +12,13 @@ template <typename T> using sptr = std::shared_ptr<T>;
 using namespace IO;
 
 namespace chatlib{
-	enum request{};
-
-	void send(const std::string &mes, sptr<IO::socket> sock, socket_op s_op){
+	inline void send(const std::string &mes, sptr<IO::socket> sock, socket_op s_op){
 		const int length = mes.size();
 		s_op.send(sock, length);
-		s_op.send(sock, mes, length);
+		s_op.send(sock, mes);
 	}
 
-	std::string recv(sptr<IO::socket> sock, socket_op s_op){
+	inline std::string recv(sptr<IO::socket> sock, socket_op s_op){
 		int length;
 		std::string mes;
 		s_op.recv(sock, length);

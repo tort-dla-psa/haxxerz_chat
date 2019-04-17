@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <unistd.h>
 #include <thread>
 #include <chrono>
@@ -12,7 +13,7 @@ client::client(sptr<IO::socket> sock)
 	:sock(sock)
 {
 	name = "generic_name";
-	connected = true;
+	end_requested = false;
 }
 
 client::~client(){
@@ -20,15 +21,19 @@ client::~client(){
 }
 
 void client::disconnect(){
-	if(connected){
-		s_op.shutdown(sock);
-		s_op.close(sock);
-		connected = false;
+	end_requested = true;
+	s_op.close(sock);
+	if(thread && thread->joinable()){
+		thread->join();
 	}
 }
 
-bool client::get_status() const{
-	return connected;
+bool client::get_end_requested() const{
+	return end_requested;
+}
+
+void client::set_end_requested(bool requested){
+	this->end_requested = requested;
 }
 
 void client::set_name(const std::string &name){
@@ -66,7 +71,7 @@ sptr<std::thread> client::get_thread(){
 
 //===========================================================//
 server::server(const unsigned int max)
-	:max(max),ended(false),end_requested(false)
+	:max(max),end_requested(false)
 {}
 
 server::~server(){
@@ -76,95 +81,105 @@ server::~server(){
 	}
 }
 
-sptr<client> server::try_accept(){
+sptr<client> server::accept_user(){
 	if(clients.size() >= max){
-		std::cerr<<"server is full\n";
-		return nullptr;
+		throw std::runtime_error("server is full");
 	}
 	sptr<IO::socket> temp;
+	sptr<client> cli;
 	try{
 		temp = s_op.accept(this->sock);
-	}catch(std::runtime_error &e){
-		std::cerr<<e.what();
-		throw std::runtime_error("can't accept client");
-	}
-	return std::make_shared<client>(temp);
-}
-
-void server::accept_admin(){
-	sptr<client> cli = try_accept();
-	if(!cli){
-		return;
-	}
-	cli->set_name(cli->recv());
-	cli->set_role(role::admin);
-	mt.lock();
-	auto thr = std::make_shared<std::thread>(&server::process, this, cli);
-	cli->set_thread(thr);
-	clients.emplace_back(cli);
-	mt.unlock();
-}
-
-void server::accept_user(){
-	while(!ended){
-		sptr<client> cli = try_accept();
-		if(!cli){ return; }
-		std::string name = cli->recv();
+		cli = std::make_shared<client>(temp);
+		cli->send("enter username\n");
+		const auto name = cli->recv();
 		cli->set_name(name);
-		cli->set_role(role::user);
-		for(const sptr<client> &cl:clients){
-			if(cl->get_name() == name){
-				cli->send("SRV: user exists");
-				cli->disconnect();
-				break;
-			}
-		}
 		mt.lock();
-		auto thr = std::make_shared<std::thread>(&server::process, this, cli);
-		cli->set_thread(thr);
-		clients.emplace_back(cli);
+		if(std::find_if(clients.begin(), clients.end(), 
+			[&](const auto &cli){
+				return (cli->get_name() == name);	
+			}) != clients.end())
+		{
+			cli->send("SRV: user exists");
+			cli->disconnect();
+		}
 		mt.unlock();
+	}catch(std::runtime_error &e){
+		throw std::runtime_error(std::string("can't accept client, ") + e.what());
 	}
+	return cli;
+}
+
+void server::add_user(sptr<client> cli){
+	mt.lock();
+	clients.emplace_back(cli);
+	auto thr = std::make_shared<std::thread>(&server::_process, this, cli);
+	cli->set_thread(thr);
+	mt.unlock();
 }
 
 void server::print_mes(const std::string &name, const std::string &mes) const{
 	std::cout<<construct(name, mes)<<'\n';
 }
 
+void server::print_mes(const std::string &mes) const{
+	std::cout<<mes<<'\n';
+}
+
 std::string server::construct(const std::string &name, const std::string &mes) const{
 	return std::string("[")+name+"]: "+mes;
 }
 
-void server::process(sptr<client> cli){
-	const std::string name = cli->get_name();
-	while(cli->get_status()){
-		const std::string mes = cli->recv();
-		print_mes(name, mes);
-		const std::string str = construct(name, mes);
-		if(mes == CHAT_EXIT_CMD){
-			mt.lock();
-			cli->disconnect();
-			mt.unlock();
-		}else if(mes == CHAT_SHUTDOWN_CMD && cli->get_role() == role::admin){
-			end_requested = true;
-		}
-		for(const auto &cl:clients){
-			if(cl->get_status()){
-				cl->send(str);
-			}
+void server::remove_user(sptr<client> cli){
+	auto it = std::find(clients.begin(), clients.end(), cli);
+	if(it == clients.end()){
+		std::cerr<<"[ERROR]:requested to remove unknown user\n";
+		return;
+	}
+	clients.erase(it);
+}
+
+void server::broadcast(const std::string &mes){
+	for(auto &cl:clients){
+		try{
+			cl->send(mes);
+		}catch(std::runtime_error &e){
+			std::cerr<<"[ERROR]:can't send message to client, "<<
+				e.what();
 		}
 	}
 }
 
+void server::_process(sptr<client> cli){
+	while(true){
+		const std::string name = cli->get_name();
+		std::string mes;
+		try{
+			mes = cli->recv();
+		}catch(std::runtime_error &e){
+			std::cerr<<"[ERROR]:can't recieve message, "<<e.what();
+			break;
+		}
+		print_mes(name, mes);
+		if(mes == CHAT_EXIT_CMD){
+			const std::string str = "**"+name+" quit**";
+			mt.lock();
+			remove_user(cli);
+			broadcast(str);
+			mt.unlock();
+			break;
+		}else if(mes == CHAT_SHUTDOWN_CMD && cli->get_role() == role::admin){
+			end_requested = true;
+			break;
+		}
+		mt.lock();
+		const std::string str = construct(name, mes);
+		broadcast(str);
+		mt.unlock();
+	}
+}
+
 void server::end(){
-	if(ended){
-		return;
-	}
-	ended = true;
 	mt.lock();
-	for(auto &cl:clients){
-		cl->disconnect();
-	}
 	clients.clear();
 	s_op.shutdown(sock);
 	s_op.close(sock);
@@ -175,28 +190,20 @@ void server::init(const int port){
 	sock = s_op.create(AF_INET, SOCK_STREAM, 0);
 	s_op.bind(sock, port);
 	s_op.listen(sock, max);
+	accept_thread = std::thread(&server::accept_user, this);
 }
 
-void server::work(){
-	accept_admin();
-	accept_thread = std::thread(&server::accept_user, this);
-	while(!end_requested){
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-		mt.lock();
-		int count = 0;
-		auto it = clients.begin();
-		while(it != clients.end()){
-			if(!(*it)->get_status()){
-				auto th = (*it)->get_thread();
-				if(th->joinable()){
-					th->join();
-				}
-				it = clients.erase(it);
-			}else{
-				it++;
-			}
-		}
-		mt.unlock();
-	}
-	end();
+int server::get_users_count(){
+	mt.lock();
+	auto count = clients.size();
+	mt.unlock();
+	return count;
+}
+
+int server::get_users_max(){
+	return this->max;
+}
+
+bool server::get_end_requested(){
+	return end_requested;
 }

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <thread>
+#include <atomic>
 #include <ncurses.h>
 #include "cli.h"
 
@@ -49,7 +51,11 @@ public:
 		endwin();
 	}
 	void draw_mes(const std::string &mes){
-		chat->write(mes);
+		if(mes.back() == '\n'){
+			chat->write(mes);
+		}else{
+			chat->write(mes + '\n');
+		}
 		chat->update();
 	}
 	std::string get_input(){
@@ -64,27 +70,45 @@ public:
 	}
 };
 
+std::atomic_bool end_requested;
+
+void _recieve(sptr<client> cli, sptr<interface> iface){
+	while(!end_requested){
+		const auto messages = cli->get_mes_queue();
+		for(const auto &mes:messages){
+			iface->draw_mes(mes);
+		}
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+	}
+}
+
 int main(int argc, char* argv[]){
-	if(argc!=3){
+	if(argc != 3){
 		std::cerr<<"provide ip and port!\n";
 		return -1;
 	}
-	interface iface;
-	iface.draw_mes("connecting\n");
-	client cli;
-	cli.connect(argv[1], atoi(argv[2]));
-	iface.draw_mes("enter nickname\n");
-	const auto nick = iface.get_input();
-	cli.set_name(nick);
-	bool end_requested = false;
+	sptr<interface> iface(new interface());
+	iface->draw_mes("connecting\n");
+	sptr<client> cli(new client());
+	cli->connect(argv[1], atoi(argv[2]));
+	iface->draw_mes("enter nickname\n");
+	const auto nick = iface->get_input();
+	cli->set_name(nick);
+	cli->send(nick);
+	std::thread recv_thread(_recieve, cli, iface);
+	end_requested = false;
 	while(!end_requested){
-		const auto messages = cli.get_mes_queue();
-		for(const auto &mes:messages){
-			iface.draw_mes(mes);
-			if(mes == "/EXIT"){
-				end_requested = true;
-			}
+		std::string mes = iface->get_input();
+		if(mes.empty()){
+			continue;
+		}
+		cli->send(mes);
+		if(mes == "/EXIT"){
+			end_requested = true;
 		}
 	}
-	cli.disconnect();
+	if(recv_thread.joinable()){
+		recv_thread.join();
+	}
+	cli->disconnect();
 }

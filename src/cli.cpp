@@ -17,6 +17,7 @@ client::~client(){
 void client::connect(const std::string &ipstr, const int port){
 	sock = s_op.create(PF_INET, SOCK_STREAM, 0);
 	s_op.connect(sock, ipstr, port);
+	connected = true;
 	read_thr = std::thread(&client::_read, this);
 }
 
@@ -30,7 +31,7 @@ void client::_read(){
 	while(connected){
 		const auto mes = chatlib::recv(sock, s_op);
 		if(mes.empty()){
-			return;
+			continue;
 		}
 		mt.lock();
 		messages.emplace_back(mes);
@@ -52,8 +53,7 @@ void client::send(const std::string &mes)const{
 
 std::vector<std::string> client::get_mes_queue(){
 	mt.lock();
-	const auto messages = this->messages;
-	this->messages.clear();
+	const auto temp = std::move(this->messages);
 	mt.unlock();
-	return messages;
+	return temp;
 }

@@ -25,14 +25,15 @@ class client{
 	std::string name;
 	sptr<IO::socket> sock;
 	socket_op s_op;
-	bool connected;
+	bool end_requested;
 	role rl;
 	sptr<std::thread> thread;
 public:
 	client(sptr<IO::socket> sock);
 	~client();
 	void disconnect();
-	bool get_status() const;
+	void set_end_requested(bool requested);
+	bool get_end_requested() const;
 	void set_name(const std::string &name);
 	std::string get_name() const;
 	void set_role(const role rl);
@@ -47,25 +48,30 @@ class server{
 	const unsigned int max;
 	sptr<IO::socket> sock;
 	socket_op s_op;
-	bool ended;
 	std::atomic_bool end_requested;
 	vect<sptr<client>> clients;
 	std::thread accept_thread;
-	sptr<client> try_accept();
-	void accept_admin();
-	void accept_user();
-	void mute_user(bool muted);
-	void ban_user(bool banned);
-	void print_mes(const std::string &name, const std::string &mes) const;
-	std::string construct(const std::string &name, const std::string &mes) const;
-	void process(sptr<client> cli);
 	std::mutex mt;
+	sptr<client> _try_accept();
+	void _process(sptr<client> cli);
 public:
 	server(const unsigned int max);
 	~server();
-	void end();
 	void init(const int port);
-	void work();
+	void end();
+	sptr<client> accept_user();
+	void add_user(sptr<client> cli);
+	void set_muted(sptr<client> cli, bool muted);
+	void set_banned(sptr<client> cli, bool banned);
+	void remove_user(sptr<client> cli);
+	void print_mes(const std::string &mes) const;
+	void print_mes(const std::string &name, const std::string &mes) const;
+	void print_err(const std::string &err) const;
+	void broadcast(const std::string &mes);
+	std::string construct(const std::string &name, const std::string &mes) const;
+	int get_users_count();
+	int get_users_max();
+	bool get_end_requested();
 };
 
 #endif
