@@ -9,11 +9,13 @@
 #include "server.h"
 #include "chatlib.h"
 
-client::client(sptr<IO::socket> sock)
+client::client(sptr<IO::socket> sock, CryptoPP::RSA::PublicKey cli_public_key)
 	:sock(sock)
 {
 	name = "generic_name";
 	end_requested = false;
+	this->cli_public_key = cli_public_key;
+	e = CryptoPP::RSAES_OAEP_SHA_Encryptor(cli_public_key);
 }
 
 client::~client(){
@@ -57,7 +59,11 @@ std::string client::recv() const{
 }
 
 void client::send(const std::string &mes){
-	chatlib::send(mes, sock, s_op);
+	std::string encr;
+	CryptoPP::StringSource ss1(mes, true,
+		new CryptoPP::PK_EncryptorFilter(rng, e,
+			new CryptoPP::StringSink(encr)));
+	chatlib::send(encr, sock, s_op);
 }
 
 void client::set_thread(sptr<std::thread> thread){
@@ -72,13 +78,30 @@ sptr<std::thread> client::get_thread(){
 //===========================================================//
 server::server(const unsigned int max)
 	:max(max),end_requested(false)
-{}
+{
+	CryptoPP::InvertibleRSAFunction params;
+	params.GenerateRandomWithKeySize(rng, 1024);
+
+	private_key = CryptoPP::RSA::PrivateKey(params);
+	srv_public_key = CryptoPP::RSA::PublicKey(params);
+	d = CryptoPP::RSAES_OAEP_SHA_Decryptor(private_key);
+}
 
 server::~server(){
 	end();
 	if(accept_thread.joinable()){
 		accept_thread.join();
 	}
+}
+
+std::string server::_decode(const std::string &mes){
+	std::string message;
+	mt.lock();
+	CryptoPP::StringSource ss2(mes, true,
+		new CryptoPP::PK_DecryptorFilter(rng, d,
+			new CryptoPP::StringSink(message)));
+	mt.unlock();
+	return message;
 }
 
 sptr<client> server::accept_user(){
@@ -89,22 +112,25 @@ sptr<client> server::accept_user(){
 	sptr<client> cli;
 	try{
 		temp = s_op.accept(this->sock);
-		cli = std::make_shared<client>(temp);
-		cli->send("enter username\n");
-		const auto name = cli->recv();
-		cli->set_name(name);
-		mt.lock();
-		if(std::find_if(clients.begin(), clients.end(), 
-			[&](const auto &cli){
-				return (cli->get_name() == name);	
-			}) != clients.end())
-		{
-			cli->send("SRV: user exists");
-			cli->disconnect();
+		{//send key
+		std::string srv_pub_key_encr;
+		CryptoPP::StringSink ss(srv_pub_key_encr);
+		srv_public_key.DEREncode(ss);
+		chatlib::send(srv_pub_key_encr, temp, s_op);
 		}
-		mt.unlock();
+		CryptoPP::RSA::PublicKey cli_public_key;
+		{//recv key;
+		const auto cli_pub_key_encr = chatlib::recv(temp, s_op);
+		CryptoPP::StringSource ss(cli_pub_key_encr, true);
+		cli_public_key.BERDecode(ss);
+		}
+		cli = std::make_shared<client>(temp, cli_public_key);
+		const auto name = _decode(cli->recv());
+		cli->set_name(name);
 	}catch(std::runtime_error &e){
 		throw std::runtime_error(std::string("can't accept client, ") + e.what());
+	}catch(...){
+		throw std::runtime_error(std::string("some error occurred"));
 	}
 	return cli;
 }
@@ -129,16 +155,44 @@ std::string server::construct(const std::string &name, const std::string &mes) c
 	return std::string("[")+name+"]: "+mes;
 }
 
+void server::send_to(sptr<client> cli, const std::string &mes){
+	mt.lock();
+	try{
+		cli->send(mes);
+	}catch(std::runtime_error &e){
+		std::cerr<<"[ERROR]:can't send message to client, "<<
+			e.what();
+	}
+	mt.unlock();
+}
+
 void server::remove_user(sptr<client> cli){
+	mt.lock();
 	auto it = std::find(clients.begin(), clients.end(), cli);
 	if(it == clients.end()){
 		std::cerr<<"[ERROR]:requested to remove unknown user\n";
 		return;
 	}
 	clients.erase(it);
+	mt.unlock();
+}
+
+sptr<client> server::get_user(const std::string &name){
+	sptr<client> user = nullptr;
+	mt.lock();
+	const auto cli = std::find_if(clients.begin(), clients.end(), 
+		[&](const auto &cli){
+			return (cli->get_name() == name);	
+		});
+	if(cli != clients.end()){
+		user = *cli;
+	}
+	mt.unlock();
+	return user;
 }
 
 void server::broadcast(const std::string &mes){
+	mt.lock();
 	for(auto &cl:clients){
 		try{
 			cl->send(mes);
@@ -147,6 +201,7 @@ void server::broadcast(const std::string &mes){
 				e.what();
 		}
 	}
+	mt.unlock();
 }
 
 void server::_process(sptr<client> cli){
@@ -154,7 +209,8 @@ void server::_process(sptr<client> cli){
 		const std::string name = cli->get_name();
 		std::string mes;
 		try{
-			mes = cli->recv();
+			const auto enc = cli->recv();
+			mes = _decode(enc);
 		}catch(std::runtime_error &e){
 			std::cerr<<"[ERROR]:can't recieve message, "<<e.what();
 			break;
@@ -162,19 +218,16 @@ void server::_process(sptr<client> cli){
 		print_mes(name, mes);
 		if(mes == CHAT_EXIT_CMD){
 			const std::string str = "**"+name+" quit**";
-			mt.lock();
-			remove_user(cli);
 			broadcast(str);
-			mt.unlock();
+			cli->set_end_requested(true);
 			break;
 		}else if(mes == CHAT_SHUTDOWN_CMD && cli->get_role() == role::admin){
 			end_requested = true;
+			cli->set_end_requested(true);
 			break;
 		}
-		mt.lock();
 		const std::string str = construct(name, mes);
 		broadcast(str);
-		mt.unlock();
 	}
 }
 
@@ -191,6 +244,14 @@ void server::init(const int port){
 	s_op.bind(sock, port);
 	s_op.listen(sock, max);
 	accept_thread = std::thread(&server::accept_user, this);
+}
+
+std::vector<sptr<client>> server::get_users(){
+	std::vector<sptr<client>> users;
+	mt.lock();
+	users = this->clients;
+	mt.unlock();
+	return users;
 }
 
 int server::get_users_count(){

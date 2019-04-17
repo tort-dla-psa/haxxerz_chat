@@ -39,17 +39,17 @@ prepare:
 
 $(blddir)/%.o: $(srcdir)/%.cpp
 	@echo "> compile $< $@"
-	@$(cxx) $(extra) $< -fPIC -I$(incdir) -I$(submodsdir)/UnixIO-cpp/include -c -o $@ -lncurses
+	@$(cxx) $(extra) $< -fPIC -I$(incdir) -I$(submodsdir)/UnixIO-cpp/include -c -o $@
 
 $(cli_trg): $(cli_obj)
 	@echo "> compile $< $@"
 	@$(cxx) $^ -o $(cli_trg) $(extra) -I$(incdir) -I$(submodsdir)/UnixIO-cpp/include \
-		-Llib -lunixiocpp -lpthread -lncurses
+		-Llib -lunixiocpp -lpthread -lncurses -lcryptopp
 
 $(srv_trg): $(srv_obj)
 	@echo "> compile $< $@"
 	@$(cxx) $^ -o $(srv_trg) $(extra) -I$(incdir) -I$(submodsdir)/UnixIO-cpp/include \
-		-Llib -lunixiocpp -lpthread -lncurses
+		-Llib -lunixiocpp -lpthread -lncurses -lcryptopp
 
 all: prepare $(IO) $(cli_trg) $(srv_trg)
 

@@ -74,11 +74,8 @@ std::atomic_bool end_requested;
 
 void _recieve(sptr<client> cli, sptr<interface> iface){
 	while(!end_requested){
-		const auto messages = cli->get_mes_queue();
-		for(const auto &mes:messages){
-			iface->draw_mes(mes);
-		}
-		std::this_thread::sleep_for(std::chrono::seconds(1));
+		const auto mes = cli->get_mes();
+		iface->draw_mes(mes);
 	}
 }
 
