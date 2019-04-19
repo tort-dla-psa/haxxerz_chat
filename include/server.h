@@ -6,17 +6,17 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <map>
 #include <atomic>
 #include <cryptopp/osrng.h>
 #include <cryptopp/sha.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/pssr.h>
 #include <cryptopp/cryptlib.h>
+
+#include "concurrent_queue.h"
 #include "file.h"
 #include "socket_op.h"
-
-#define CHAT_EXIT_CMD "/exit"
-#define CHAT_SHUTDOWN_CMD "/end"
 
 template <typename T> using vect = std::vector<T>;
 template <typename T> using uptr = std::unique_ptr<T>;
@@ -56,17 +56,22 @@ class server{
 	const unsigned int max;
 	sptr<IO::socket> sock;
 	socket_op s_op;
-	std::atomic_bool end_requested;
+	std::atomic_bool end_requested, ended;
 	vect<sptr<client>> clients;
 	std::thread accept_thread;
 	std::mutex mt;
+
 	CryptoPP::RSA::PrivateKey private_key;
 	CryptoPP::RSA::PublicKey srv_public_key;
 	CryptoPP::RSAES_OAEP_SHA_Decryptor d;
 	CryptoPP::AutoSeededRandomPool rng;
+
 	sptr<client> _try_accept();
 	void _process(sptr<client> cli);
 	std::string _decode(const std::string &mes);
+
+	std::map<std::string, std::string> mp;
+	sptr<concurrent_queue<std::string>> cqueue;
 public:
 	server(const unsigned int max);
 	~server();
@@ -88,6 +93,8 @@ public:
 	int get_users_count();
 	int get_users_max();
 	bool get_end_requested();
+	void add_callback(std::string command, std::string func_name);
+	void pass_cqueue(sptr<concurrent_queue<std::string>> cqueue);
 };
 
 #endif

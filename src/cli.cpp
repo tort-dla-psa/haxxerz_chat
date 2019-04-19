@@ -7,13 +7,12 @@
 template <typename T> using vect = std::vector<T>;
 
 client::client(){
+	ended = false;
 	_generate_keys();
 }
 
 client::~client(){
-	if(connected){
-		disconnect();
-	}
+	disconnect();
 }
 
 void client::_generate_keys(){
@@ -44,7 +43,7 @@ std::string client::_decrypt(const std::string &mes){
 void client::connect(const std::string &ipstr, const int port){
 	sock = s_op.create(PF_INET, SOCK_STREAM, 0);
 	s_op.connect(sock, ipstr, port);
-	connected = true;
+	ended = false;
 	{//recv key;
 	const auto srv_pub_key_encr = chatlib::recv(sock, s_op);
 	CryptoPP::StringSource ss(srv_pub_key_encr, true);
@@ -61,9 +60,12 @@ void client::connect(const std::string &ipstr, const int port){
 }
 
 void client::disconnect(){
+	if(ended){
+		return;
+	}
 	s_op.shutdown(sock);
 	s_op.close(sock);
-	connected = false;
+	ended = false;
 }
 
 void client::set_name(const std::string &name){
@@ -83,4 +85,8 @@ std::string client::get_mes(){
 	const auto mes = chatlib::recv(sock, s_op);
 	const auto decr = _decrypt(mes);
 	return decr;
+}
+
+bool client::get_ended(){
+	return ended;
 }

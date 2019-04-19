@@ -17,7 +17,7 @@ using namespace IO;
 class client{
 	socket_op s_op;
 	sptr<IO::socket> sock;
-	bool connected;
+	bool ended;
 	std::string name;
 	void _generate_keys();
 	std::string _encrypt(const std::string &mes);
@@ -36,4 +36,5 @@ public:
 	void set_name(const std::string &name);
 	std::string get_name()const;
 	std::string get_mes();
+	bool get_ended();
 };

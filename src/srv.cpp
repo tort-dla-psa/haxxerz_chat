@@ -24,7 +24,11 @@ client::~client(){
 
 void client::disconnect(){
 	end_requested = true;
-	s_op.close(sock);
+	try{
+		s_op.close(sock);
+	}catch(const std::runtime_error &e){
+		std::cerr << "error closing socket for " <<name << ":" << e.what();
+	}
 	if(thread && thread->joinable()){
 		thread->join();
 	}
@@ -77,7 +81,7 @@ sptr<std::thread> client::get_thread(){
 
 //===========================================================//
 server::server(const unsigned int max)
-	:max(max),end_requested(false)
+	:max(max),end_requested(false),ended(false)
 {
 	CryptoPP::InvertibleRSAFunction params;
 	params.GenerateRandomWithKeySize(rng, 1024);
@@ -96,18 +100,13 @@ server::~server(){
 
 std::string server::_decode(const std::string &mes){
 	std::string message;
-	mt.lock();
 	CryptoPP::StringSource ss2(mes, true,
 		new CryptoPP::PK_DecryptorFilter(rng, d,
 			new CryptoPP::StringSink(message)));
-	mt.unlock();
 	return message;
 }
 
 sptr<client> server::accept_user(){
-	if(clients.size() >= max){
-		throw std::runtime_error("server is full");
-	}
 	sptr<IO::socket> temp;
 	sptr<client> cli;
 	try{
@@ -127,9 +126,20 @@ sptr<client> server::accept_user(){
 		cli = std::make_shared<client>(temp, cli_public_key);
 		const auto name = _decode(cli->recv());
 		cli->set_name(name);
+		if(clients.size() >= max){
+			print_mes(std::string("**can't accept ")+name+", server is full**");
+			cli->disconnect();
+			return nullptr;
+		}
 	}catch(std::runtime_error &e){
+		if(end_requested){
+			return nullptr;
+		}
 		throw std::runtime_error(std::string("can't accept client, ") + e.what());
 	}catch(...){
+		if(end_requested){
+			return nullptr;
+		}
 		throw std::runtime_error(std::string("some error occurred"));
 	}
 	return cli;
@@ -199,44 +209,64 @@ void server::broadcast(const std::string &mes){
 		}catch(std::runtime_error &e){
 			std::cerr<<"[ERROR]:can't send message to client, "<<
 				e.what();
+		}catch(...){
+			std::cerr<<"[ERROR]:some error occurred\n";
 		}
 	}
 	mt.unlock();
 }
 
 void server::_process(sptr<client> cli){
-	while(true){
+	while(!cli->get_end_requested()){
 		const std::string name = cli->get_name();
 		std::string mes;
 		try{
 			const auto enc = cli->recv();
 			mes = _decode(enc);
 		}catch(std::runtime_error &e){
+			if(end_requested){
+				break;
+			}
 			std::cerr<<"[ERROR]:can't recieve message, "<<e.what();
-			break;
 		}
 		print_mes(name, mes);
-		if(mes == CHAT_EXIT_CMD){
-			const std::string str = "**"+name+" quit**";
-			broadcast(str);
-			cli->set_end_requested(true);
-			break;
-		}else if(mes == CHAT_SHUTDOWN_CMD && cli->get_role() == role::admin){
-			end_requested = true;
-			cli->set_end_requested(true);
-			break;
+
+		mt.lock();
+		auto it = mp.find(mes);
+		mt.unlock();
+		if(it != mp.end()){
+			const auto trg = it->second;
+			cqueue->push(trg);
+			cqueue->push(cli->get_name());
 		}
+
 		const std::string str = construct(name, mes);
-		broadcast(str);
+		try{
+			broadcast(str);
+		}catch(std::runtime_error &e){
+			if(end_requested){
+				break;
+			}
+			std::cerr<<"[ERROR]:can't recieve message, "<<e.what();
+		}
 	}
 }
 
 void server::end(){
+	end_requested = true;
+	if(ended){
+		return;
+	}
 	mt.lock();
+	try{
+		s_op.shutdown(sock);
+		s_op.close(sock);
+	}catch(const std::runtime_error &e){
+		print_mes(std::string("**ERROR: Can't end server: ")+e.what());
+	}
 	clients.clear();
-	s_op.shutdown(sock);
-	s_op.close(sock);
 	mt.unlock();
+	ended = true;
 }
 
 void server::init(const int port){
@@ -267,4 +297,12 @@ int server::get_users_max(){
 
 bool server::get_end_requested(){
 	return end_requested;
+}
+
+void server::add_callback(std::string command, std::string func_name){
+	mp[command] = func_name;
+}
+
+void server::pass_cqueue(sptr<concurrent_queue<std::string>> cqueue){
+	this->cqueue = cqueue;
 }

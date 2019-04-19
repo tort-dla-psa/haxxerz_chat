@@ -1,15 +1,19 @@
 #include <iostream>
+#include <unistd.h>
 #include <thread>
 #include <chrono>
 
+#include "chatlib.h"
 #include "server.h"
+#include "concurrent_queue.h"
 
-void _remove(sptr<server> srv){
-	while(srv->get_users_count() != 0){
+sptr<server> srv;
+sptr<concurrent_queue<std::string>> cqueue;
+std::mutex cb_mutex;
+
+void _remove(){
+	while(!srv->get_end_requested()){
 		auto users = srv->get_users();
-		if(srv->get_end_requested()){
-			break;
-		}
 		for(auto &u:users){
 			if(u->get_end_requested()){
 				srv->print_mes("**"+u->get_name()+" disconnected**");
@@ -20,19 +24,77 @@ void _remove(sptr<server> srv){
 	}
 }
 
-int main(int argc, char* argv[]){
-	sptr<server> srv(new server(10));
-	srv->init(atoi(argv[1]));
-	auto admin = srv->accept_user();
-	srv->send_to(admin, "welcome! you are an admin from now on");
-	admin->set_role(role::admin);
-	srv->add_user(admin);
-	std::thread thr(_remove, srv);
-	while(srv->get_users_count()){
-		if(srv->get_end_requested()){
+void on_exit_cmd(sptr<client> sender){
+	srv->remove_user(sender);
+	srv->print_mes(std::string("**")+sender->get_name()+" requested exit**");
+	srv->broadcast("**"+sender->get_name()+" quit**");
+}
+
+void on_end_cmd(sptr<client> sender){
+	if(sender->get_role() != role::admin){
+		sender->send("**You have no rights!**");
+		return;
+	}
+	srv->broadcast("**"+sender->get_name()+" requested server to stop**");
+	srv->end();
+}
+
+std::map<std::string, std::function<void(sptr<client>)>> callbacks;
+int lastname=0;
+void add_callback(const std::string &command, std::function<void(sptr<client>)> cb){
+	callbacks[std::to_string(lastname)] = std::bind(cb, std::placeholders::_1);
+	srv->add_callback(command, std::to_string(lastname));
+	lastname++;
+}
+
+void cb_listen(){
+	while(!srv->get_end_requested()){
+		std::string trg;
+		if(!cqueue->wait_pop(trg) && cqueue->exit_requested()){
 			break;
 		}
-		auto cli = srv->accept_user();
+		std::string name;
+		if(!cqueue->wait_pop(name) && cqueue->exit_requested()){
+			break;
+		}
+		cb_mutex.lock();
+		auto it = callbacks.find(trg);
+		cb_mutex.unlock();
+		if(it != callbacks.end()){
+			(it->second)(srv->get_user(name));
+		}
+	}
+}
+
+int main(int argc, char* argv[]){
+	srv = std::make_shared<server>(10);
+	srv->init(atoi(argv[1]));
+	cqueue = std::make_shared<concurrent_queue<std::string>>();
+	srv->pass_cqueue(cqueue);
+	std::thread cb_thread(cb_listen);
+	add_callback(chatlib::cmd_exit, on_exit_cmd);
+	add_callback(chatlib::cmd_end, on_end_cmd);
+	sptr<client> admin;
+	try{
+		admin = srv->accept_user();
+		admin->set_role(role::admin);
+		srv->send_to(admin, "welcome! you are an admin from now on");
+		srv->add_user(admin);
+	}catch(const std::runtime_error &e){
+		std::cerr<<e.what();
+	}
+	std::thread thr(_remove);
+	while(!srv->get_end_requested()){
+		sptr<client> cli;
+		try{
+			cli = srv->accept_user();
+		}catch(const std::runtime_error &e){
+			std::cerr<<e.what();
+		}
+		if(!cli && srv->get_end_requested()){
+			break;
+		}
+		cli->set_role(role::user);
 		if(srv->get_user(cli->get_name())){
 			srv->send_to(cli, "error: user exists");
 			cli->disconnect();
@@ -45,6 +107,9 @@ int main(int argc, char* argv[]){
 	srv->end();
 	if(thr.joinable()){
 		thr.join();
+	}
+	if(cb_thread.joinable()){
+		cb_thread.join();
 	}
 	return 0;
 }

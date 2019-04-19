@@ -25,4 +25,6 @@ namespace chatlib{
 		s_op.recv(sock, mes, length);
 		return mes;
 	}
+	const auto cmd_exit = "/exit";
+	const auto cmd_end = "/end";
 };

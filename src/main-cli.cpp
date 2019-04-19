@@ -2,6 +2,8 @@
 #include <thread>
 #include <atomic>
 #include <ncurses.h>
+
+#include "chatlib.h"
 #include "cli.h"
 
 class window{
@@ -70,12 +72,14 @@ public:
 	}
 };
 
-std::atomic_bool end_requested;
-
 void _recieve(sptr<client> cli, sptr<interface> iface){
-	while(!end_requested){
-		const auto mes = cli->get_mes();
-		iface->draw_mes(mes);
+	while(!cli->get_ended()){
+		try{
+			const auto mes = cli->get_mes();
+			iface->draw_mes(mes);
+		}catch(const std::runtime_error &e){
+			iface->draw_mes(std::string("**can't recieve message:")+e.what());
+		}
 	}
 }
 
@@ -91,21 +95,29 @@ int main(int argc, char* argv[]){
 	iface->draw_mes("enter nickname\n");
 	const auto nick = iface->get_input();
 	cli->set_name(nick);
-	cli->send(nick);
+	try{
+		cli->send(nick);
+	}catch(const std::runtime_error &e){
+		iface->draw_mes(std::string("**ERROR: can't send, ")+e.what()+"**");
+	}
 	std::thread recv_thread(_recieve, cli, iface);
-	end_requested = false;
-	while(!end_requested){
+	while(!cli->get_ended()){
 		std::string mes = iface->get_input();
 		if(mes.empty()){
 			continue;
 		}
-		cli->send(mes);
-		if(mes == "/EXIT"){
-			end_requested = true;
+		try{
+			cli->send(mes);
+		}catch(const std::runtime_error &e){
+			iface->draw_mes(std::string("**ERROR: can't send, ")+e.what()+"**");
+		}catch(...){
+			iface->draw_mes("**ERROR: some error occurred**");
+		}
+		if(mes == chatlib::cmd_exit || mes == chatlib::cmd_end){
+			cli->disconnect();
 		}
 	}
 	if(recv_thread.joinable()){
 		recv_thread.join();
 	}
-	cli->disconnect();
 }
