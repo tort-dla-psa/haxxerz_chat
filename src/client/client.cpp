@@ -41,21 +41,21 @@ std::string client::_decrypt(const std::string &mes){
 }
 
 void client::connect(const std::string &ipstr, const int port){
-	sock = s_op.create(PF_INET, SOCK_STREAM, 0);
-	s_op.connect(sock, ipstr, port);
+	sock = std::make_shared<io::socket>(PF_INET, SOCK_STREAM, 0);
+	//s_op.connect(sock, ipstr, port);
 	ended = false;
 	{//recv key;
-	const auto srv_pub_key_encr = chatlib::recv(sock, s_op);
-	CryptoPP::StringSource ss(srv_pub_key_encr, true);
-	srv_public_key.BERDecode(ss);
-	e = CryptoPP::RSAES_OAEP_SHA_Encryptor(srv_public_key);
+        const auto srv_pub_key_encr = protocol::recv(sock);
+        CryptoPP::StringSource ss(srv_pub_key_encr, true);
+        srv_public_key.BERDecode(ss);
+        e = CryptoPP::RSAES_OAEP_SHA_Encryptor(srv_public_key);
 	}
 
 	{//send key
-	std::string my_pub_key_encr;
-	CryptoPP::StringSink ss(my_pub_key_encr);
-	my_public_key.DEREncode(ss);
-	chatlib::send(my_pub_key_encr, sock, s_op);
+        std::string my_pub_key_encr;
+        CryptoPP::StringSink ss(my_pub_key_encr);
+        my_public_key.DEREncode(ss);
+        protocol::send(my_pub_key_encr, sock);
 	}
 }
 
@@ -63,8 +63,7 @@ void client::disconnect(){
 	if(ended){
 		return;
 	}
-	s_op.shutdown(sock);
-	s_op.close(sock);
+    sock->close();
 	ended = false;
 }
 
@@ -78,11 +77,11 @@ std::string client::get_name()const{
 
 void client::send(const std::string &mes){
 	const auto encr = _encrypt(mes);
-	chatlib::send(encr, sock, s_op);
+	protocol::send(encr, sock);
 }
 
 std::string client::get_mes(){
-	const auto mes = chatlib::recv(sock, s_op);
+	const auto mes = protocol::recv(sock);
 	const auto decr = _decrypt(mes);
 	return decr;
 }

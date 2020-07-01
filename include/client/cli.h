@@ -6,17 +6,10 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/cryptlib.h>
-#include "file.h"
-#include "socket_op.h"
-
-template <typename T> using sptr = std::shared_ptr<T>;
-template <typename T> using vec = std::vector<T>;
-
-using namespace IO;
+#include "socket.hpp"
 
 class client{
-	socket_op s_op;
-	sptr<IO::socket> sock;
+	std::shared_ptr<io::socket> sock;
 	bool ended;
 	std::string name;
 	void _generate_keys();

@@ -3,28 +3,29 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "file.h"
-#include "socket_op.h"
+#include "socket.hpp"
 
-template <typename T> using vect = std::vector<T>;
-template <typename T> using sptr = std::shared_ptr<T>;
+namespace protocol{
+inline void send(const std::string &mes, std::shared_ptr<io::socket> sock){
+    uint64_t len = mes.size();
+    sock->write_all(len);
+    sock->write_all(mes.data(), len);
+}
 
-using namespace IO;
+inline std::string recv(std::shared_ptr<io::socket> sock){
+    uint64_t length;
+    auto rc = sock->read_all(length);
+    if(rc == EAGAIN || rc == EWOULDBLOCK){
+        return "";
+    }
+    std::string mes(length, ' ');
+    sock->read_all(&mes.at(0), length);
+    return mes;
+}
 
-namespace chatlib{
-	inline void send(const std::string &mes, sptr<IO::socket> sock, socket_op s_op){
-		const int length = mes.size();
-		s_op.send(sock, length);
-		s_op.send(sock, mes);
-	}
+namespace cmds{
+const std::string exit = "/exit";
+const std::string end = "/end";
+};
 
-	inline std::string recv(sptr<IO::socket> sock, socket_op s_op){
-		int length;
-		std::string mes;
-		s_op.recv(sock, length);
-		s_op.recv(sock, mes, length);
-		return mes;
-	}
-	const auto cmd_exit = "/exit";
-	const auto cmd_end = "/end";
 };
