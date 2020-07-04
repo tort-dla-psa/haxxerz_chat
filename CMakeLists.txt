@@ -11,6 +11,9 @@ include_directories(${CURSES_INCLUDE_DIRS})
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 find_package(Threads REQUIRED)
+find_package(Boost COMPONENTS system)
+
+include_directories(${Boost_INCLUDE_DIR})
 
 include_directories(include)
 
@@ -22,14 +25,20 @@ set(CLI_SRV src/client/client.cpp
     src/client/main.cpp)
 
 add_executable(server ${SRC_SRV})
-target_include_directories(server PRIVATE include/server)
+target_include_directories(server PRIVATE include
+    include/server
+    ${Boost_INCLUDE_DIR})
 
 add_executable(client ${CLI_SRV})
-target_include_directories(client PRIVATE include/client)
+target_include_directories(client PRIVATE include
+    include/client
+    ${Boost_INCLUDE_DIR})
 
 target_link_libraries(server ${CMAKE_THREAD_LIBS_INIT}
     ${CURSES_LIBRARIES}
+    ${Boost_LIBRARIES}
     cryptopp)
 target_link_libraries(client ${CMAKE_THREAD_LIBS_INIT}
     ${CURSES_LIBRARIES}
+    ${Boost_LIBRARIES}
     cryptopp)

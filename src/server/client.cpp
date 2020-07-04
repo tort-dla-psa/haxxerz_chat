@@ -1,67 +1,73 @@
 #include "client.h"
 #include "chatlib.h"
+#include <vector>
 
-client::client(std::shared_ptr<io::socket> sock, CryptoPP::RSA::PublicKey cli_public_key)
-	:m_sock(sock),
-    m_pub_key(cli_public_key)
-{
-	m_name = "generic_name";
-	m_enc = CryptoPP::RSAES_OAEP_SHA_Encryptor(cli_public_key);
+chat_session::chat_session(sock socket, server &srv_ref)
+    :m_socket(std::move(socket)),
+    m_srv_ref(srv_ref)
+{}
+
+void chat_session::start() {
+    auto self = shared_from_this();
+    m_srv_ref.join(std::move(self));
+    do_read_header();
 }
 
-client::~client(){
-	disconnect();
+void chat_session::deliver(const message& msg){
+    bool write_in_progress = !m_write_msgs.empty();
+    m_write_msgs.push_back(msg);
+    if (!write_in_progress) {
+        do_write();
+    }
 }
 
-void client::disconnect(){
-    m_sock->close();
+void chat_session::do_read_header() {
+    using read = boost::asio::async_read;
+    using buf = boost::asio::buffer;
+    auto self = shared_from_this();
+    read(m_socket, buf(&m_read_msg.header, message::header_len),
+        [this, self](boost::system::error_code ec, size_t) {
+            if (!ec) {
+                protocol::decode_header(m_read_msg);
+                do_read_body();
+            } else {
+                m_srv_ref.process_error(self);
+            }
+    });
 }
 
+void chat_session::do_read_body() {
+    using read = boost::asio::async_read;
+    using buf = boost::asio::buffer;
+    auto self = shared_from_this();
 
-void client::set_name(const std::string &name){
-	this->m_name = name;
+    read(m_socket, buf(m_read_msg.data.data(), m_read_msg.data.size()),
+        [this, self](boost::system::error_code ec, size_t) {
+            if (!ec) {
+                m_srv_ref.deliver(m_read_msg);
+                do_read_header();
+            } else {
+                m_srv_ref.process_error(self);
+            }
+    });
 }
 
-const std::string& client::name() const{
-	return m_name;
-}
+void chat_session::do_write() {
+    using write = boost::asio::async_write;
+    using buf = boost::asio::buffer;
+    auto self = shared_from_this();
+    auto &mes_to_write = m_write_msgs.front();
+    auto bytes = protocol::encode(mes_to_write);
 
-void client::set_role(const role rl){
-	this->m_rl = rl;
+    write(m_socket, buf(bytes.data(), bytes.size()),
+        [this, self](boost::system::error_code ec, size_t) {
+            if (!ec) {
+                m_write_msgs.pop_front();
+                if (!m_write_msgs.empty()) {
+                    do_write();
+                }
+            } else {
+                m_srv_ref.process_error(self);
+            }
+    });
 }
-
-role client::get_role() const{
-	return m_rl;
-}
-
-std::future<struct message> client::recv(semaphore &s) const{
-    auto task = [this, &s](){
-        semaphore_controller sc(s);
-        auto mes = protocol::recv(m_sock);
-        message m;
-        m.message = std::move(mes);
-        return m;
-    };
-	return std::async(std::launch::async, std::move(task));
-}
-
-void client::send(const struct message &mes){
-	std::string encr;
-	CryptoPP::StringSource ss1(mes.message, true,
-		new CryptoPP::PK_EncryptorFilter(m_rng, m_enc,
-			new CryptoPP::StringSink(encr)));
-	protocol::send(encr, m_sock);
-}
-
-std::future<void> client::send_msgs(semaphore &s){
-    auto task = [this, &s](){
-        semaphore_controller sc(s);
-        while(!m_msg_to_send.empty()){
-            auto mes = std::move(m_msg_to_send.front());
-            protocol::send(mes.message, m_sock);
-            m_msg_to_send.pop();
-        }
-    };
-	return std::async(std::launch::async, std::move(task));
-}
-
