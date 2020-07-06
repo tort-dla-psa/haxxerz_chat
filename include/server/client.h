@@ -38,6 +38,7 @@ private:
 
     sock m_socket;
     server& m_srv_ref;
+    std::vector<uint8_t> m_read_msg_header;
     message m_read_msg;
     std::deque<message> m_write_msgs;
 };

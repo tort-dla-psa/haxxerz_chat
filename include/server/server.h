@@ -1,5 +1,6 @@
 #pragma once
 
+#include <boost/asio/io_service.hpp>
 #include <deque>
 #include <string>
 #include <vector>
@@ -24,17 +25,14 @@
 
 class chat_participant;
 using chat_participant_ptr = std::shared_ptr<chat_participant>;
-class chat_session{
-public:
-    void start();
-};
+class chat_session;
 
 class server{
 public:
     using tcp_ns = boost::asio::ip::tcp;
     using chat_message_queue = std::deque<message>;
 
-    server(boost::asio::io_context& io_context,
+    server(boost::asio::io_service& io_context,
         const tcp_ns::endpoint& endpoint);
 
     void join(chat_participant_ptr sess);
@@ -44,6 +42,7 @@ private:
     void do_accept();
 
     tcp_ns::acceptor m_acceptor;
+    tcp_ns::socket m_sock;
     std::set<chat_participant_ptr> m_participants;
     chat_message_queue recent_msgs_;
 };
