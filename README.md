@@ -1,28 +1,29 @@
 # haxxerz_chat
-Simple decentralized socket chat with encryprion
+Simple decentralized socket chat with encryption
 
-##Dependencies
+## Dependencies
 
-1. g++
-1. ncurses
-1. cpypto++
+1. g++/clang with c++17 support
+1. boost 1.65
 
-##Build
+## Build
 
 ~~~bash
-  make all extra="-O2 -s"
+  mkdir build && cd build
+  cmake ..
+  make -j4
 ~~~
 
-##Run
+## Usage
 
 **Server:**
 
 ~~~bash
-  ./bin/srv [port]
+  server [port(optional, default=1337)]
 ~~~
 
 **Client:**
 
 ~~~bash
-  ./bin/cli [ip] [port] # use ip 0.0.0.0 for local testing
+  client [ip] [port] # use ip 0.0.0.0 for local testing
 ~~~
