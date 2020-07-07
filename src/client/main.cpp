@@ -1,15 +1,22 @@
 #include <iostream>
 #include <chrono>
+#include <memory>
 #include <thread>
 #include <atomic>
 #include <iostream>
 
 #include "chatlib.h"
 #include "client.h"
+#include "ui.h"
 
 int main(int argc, char* argv[]){
     using namespace boost::asio::ip;
 
+    std::unique_ptr<class ui> ui;
+    std::thread ui_render_thread([&ui](){
+        ui = std::make_unique<ui_imgui>();
+        ui->start();
+    });
     try {
         if (argc != 3) {
             std::cerr << "Usage: chat_client <host> <port>\n";
@@ -22,20 +29,20 @@ int main(int argc, char* argv[]){
         auto endpoint_iterator = resolver.resolve({ argv[1], argv[2] });
         client c(io_service, endpoint_iterator);
 
-        std::thread t([&io_service](){ io_service.run(); });
-        std::thread out_thr([&c](){
+        std::thread out_thr([&c, &ui](){
             while(c.connected()){
                 while(c.msgs_count() != 0){
                     message mes;
                     if(!c.msg(mes)){
                         break;
                     }
-                    std::cout<<mes.get_str()<<std::endl;
+                    ui->add_recieved_msg(mes);
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(100)); //FIXME
             }
         });
 
+        std::thread t([&io_service](){ io_service.run(); });
         while (true){
             message mes;
             std::string str;
@@ -56,6 +63,9 @@ int main(int argc, char* argv[]){
         }
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
+    }
+    if(ui_render_thread.joinable()){
+        ui_render_thread.join();
     }
     return 0;
 }
