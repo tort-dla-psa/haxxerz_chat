@@ -18,17 +18,21 @@ public:
 
 	client(boost::asio::io_service& io_service,
         tcp_ns::resolver::iterator endpoint_it);
+    bool connected()const;
     void disconnect();
 	void send(const message &mes);
+
+    bool msg(message &mes);
+    size_t msgs_count();
 private:
     void do_read_header();
     void do_read_body();
     void do_write();
 
-    message m_read_msg;
-    std::vector<uint8_t> m_read_msg_header;
+    bool m_connected;
     chat_mes_queue m_write_msgs;
-    chat_mes_queue m_queue;
+    std::mutex m_read_mt, m_write_mt;
+    chat_mes_queue m_read_msgs;
     tcp_ns::socket m_sock;
     boost::asio::io_service& m_io_service;
 };

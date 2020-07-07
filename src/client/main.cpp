@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <thread>
 #include <atomic>
 #include <iostream>
@@ -22,6 +23,18 @@ int main(int argc, char* argv[]){
         client c(io_service, endpoint_iterator);
 
         std::thread t([&io_service](){ io_service.run(); });
+        std::thread out_thr([&c](){
+            while(c.connected()){
+                while(c.msgs_count() != 0){
+                    message mes;
+                    if(!c.msg(mes)){
+                        break;
+                    }
+                    std::cout<<mes.get_str()<<std::endl;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); //FIXME
+            }
+        });
 
         while (true){
             message mes;
@@ -37,6 +50,9 @@ int main(int argc, char* argv[]){
         c.disconnect();
         if(t.joinable()){
             t.join();
+        }
+        if(out_thr.joinable()){
+            out_thr.join();
         }
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
