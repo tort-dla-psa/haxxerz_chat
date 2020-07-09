@@ -5,20 +5,19 @@ set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(CURSES_NEED_NCURSES TRUE)
 find_package(Curses REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
-
-include_directories(${CURSES_INCLUDE_DIRS}
-    )
-
-set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system)
 
-include_directories(${Boost_INCLUDE_DIR})
+
+include_directories(${CURSES_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIR}
+    )
 
 include_directories(include
     third-party)
@@ -46,6 +45,7 @@ add_executable(client ${SRC_CLI})
 target_include_directories(client PRIVATE include
     include/client
     third-party/imgui
+    third-party/rwqueue
     third-party/imgui/examples
     ${Boost_INCLUDE_DIR}
     ${SDL2_INCLUDE_DIRS}

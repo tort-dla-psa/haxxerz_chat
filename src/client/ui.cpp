@@ -6,8 +6,11 @@
 #include "imgui/examples/imgui_impl_sdl.h"
 #include "imgui/examples/imgui_impl_opengl3.h"
 
-void ui::add_recieved_msg(const message &mes){
-    m_msgs.emplace_back(mes);
+ui::queue_t& ui::queue_send(){
+    return m_write_q;
+}
+ui::queue_t& ui::queue_recv(){
+    return m_read_q;
 }
 
 ui_imgui::ui_imgui()
@@ -64,7 +67,6 @@ ui_imgui::ui_imgui()
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
 
     // Setup Platform/Renderer bindings
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
@@ -73,6 +75,7 @@ ui_imgui::ui_imgui()
 
 void ui_imgui::start(){
     bool done = false;
+    std::string message(32, '\0');
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     while(!done){
         SDL_Event event;
@@ -96,9 +99,35 @@ void ui_imgui::start(){
 
         ImGui::Begin("UI");
         ImGui::Text("Time per frame %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        {
+            class message mes;
+            while(m_read_q.try_dequeue(mes)){
+                m_msgs.emplace_back(mes);
+            }
+        }
+        ImGuiWindowFlags window_flags =
+            ImGuiWindowFlags_HorizontalScrollbar;
+        ImVec2 child_size = ImVec2(
+            ImGui::GetWindowContentRegionWidth(),
+            ImGui::GetTextLineHeightWithSpacing() * 18);
+        ImGui::BeginChild("Messages", child_size, false, window_flags);
+        static bool needs_scroll;
         for(auto &mes:m_msgs){
             auto str = mes.get_str();
             ImGui::Text("Message:%s",str.c_str());
+        }
+        if(needs_scroll){
+            ImGui::SetScrollHereY(1.f); // 0.0f:top, 0.5f:center, 1.0f:bottom
+            needs_scroll = false;
+        }
+        ImGui::EndChild();
+        if(ImGui::InputText("", message.data(), message.size(),
+            ImGuiInputTextFlags_EnterReturnsTrue))
+        {
+            needs_scroll = true;
+            class message mes;
+            mes.set_str(message);
+            m_write_q.enqueue(mes);
         }
         ImGui::End();
 

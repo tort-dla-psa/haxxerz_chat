@@ -1,3 +1,6 @@
 [submodule "third-party/imgui"]
 	path = third-party/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "third-party/rwqueue"]
+	path = third-party/rwqueue
+	url = https://github.com/cameron314/readerwriterqueue
