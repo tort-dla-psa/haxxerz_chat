@@ -98,11 +98,14 @@ void ui_imgui::start(){
         auto drawList = ImGui::GetBackgroundDrawList();
 
         ImGui::Begin("UI");
+        static bool needs_scroll;
+        static bool msg_sent;
         ImGui::Text("Time per frame %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         {
             class message mes;
             while(m_read_q.try_dequeue(mes)){
                 m_msgs.emplace_back(mes);
+                needs_scroll = true;
             }
         }
         ImGuiWindowFlags window_flags =
@@ -110,30 +113,59 @@ void ui_imgui::start(){
         ImVec2 child_size = ImVec2(
             ImGui::GetWindowContentRegionWidth(),
             ImGui::GetTextLineHeightWithSpacing() * 18);
+
         ImGui::BeginChild("Messages", child_size, false, window_flags);
-        static bool needs_scroll;
+        struct Funcs {
+            static int MyResizeCallback(ImGuiInputTextCallbackData* data) {
+                if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+                    ImVector<char>* my_str = (ImVector<char>*)data->UserData;
+                    IM_ASSERT(my_str->begin() == data->Buf);
+                    my_str->resize(data->BufSize); // NB: On resizing calls, generally data->BufSize == data->BufTextLen + 1
+                    data->Buf = my_str->begin();
+                }
+                return 0;
+            }
+
+            static bool MyInputTextMultiline(const char* label, ImVector<char>* my_str,
+                const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0)
+            {
+                IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
+                return ImGui::InputTextMultiline(label, my_str->begin(), (size_t)my_str->size(), size,
+                    flags | ImGuiInputTextFlags_CallbackResize, Funcs::MyResizeCallback, (void*)my_str);
+            }
+        };
+
+        static ImVector<char> my_str;
+        if (my_str.empty()){
+            my_str.push_back(0);
+        }
+
         for(auto &mes:m_msgs){
             auto str = mes.get_str();
-            ImGui::Text("Message:%s",str.c_str());
+            ImGui::Text("Message:%s", str.c_str());
         }
         if(needs_scroll){
             ImGui::SetScrollHereY(1.f); // 0.0f:top, 0.5f:center, 1.0f:bottom
             needs_scroll = false;
         }
         ImGui::EndChild();
-        if(ImGui::InputText("", message.data(), message.size(),
-            ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            needs_scroll = true;
+
+        msg_sent = (Funcs::MyInputTextMultiline("Message", &my_str, ImVec2(-FLT_MIN, ImGui::GetTextLineHeight()*4),
+            ImGuiInputTextFlags_CtrlEnterForNewLine |
+            ImGuiInputTextFlags_EnterReturnsTrue));
+        if(msg_sent) {
             class message mes;
-            mes.set_str(message);
+            std::string std_adapt;
+            std::copy(my_str.begin(), my_str.end(), std::back_inserter(std_adapt));
+            mes.set_str(std_adapt);
             m_write_q.enqueue(mes);
+            my_str.clear();
         }
         ImGui::End();
 
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-        glClearColor(1, 1, 1, 1);
+        glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         SDL_GL_SwapWindow(window);

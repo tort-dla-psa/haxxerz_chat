@@ -1,7 +1,6 @@
 #include <mutex>
 #include <sys/socket.h>
 #include <thread>
-#include <ncurses.h>
 #include <iostream>
 #include "chatlib.h"
 #include "client.h"
