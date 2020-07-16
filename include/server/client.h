@@ -14,6 +14,7 @@
 #include "datatypes.hpp"
 #include "server.h"
 
+namespace net_send{
 class chat_participant {
 public:
     virtual ~chat_participant() {}
@@ -41,4 +42,6 @@ private:
     std::vector<uint8_t> m_read_msg_header;
     message m_read_msg;
     std::deque<message> m_write_msgs;
+};
+
 };

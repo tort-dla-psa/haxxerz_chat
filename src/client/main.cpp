@@ -26,21 +26,15 @@ int main(int argc, char* argv[]){
 
         tcp::resolver resolver(io_service);
         auto endpoint_iterator = resolver.resolve({ argv[1], argv[2] });
-        client c(io_service, endpoint_iterator);
+        net_send::chat_client c(recv_q, io_service, endpoint_iterator);
         std::thread t([&io_service](){ io_service.run(); });
         std::thread cli_thr([&c, &send_q, &recv_q, &end](){
             while(!end){
-                class message mes;
-                while(send_q.try_dequeue(mes)){
+                std::string str;
+                while(send_q.try_dequeue(str)){
+                    net_send::message mes;
+                    mes.set_str(str);
                     c.send(mes);
-                }
-                while(c.msgs_count() != 0){
-                    message mes;
-                    if(!c.msg(mes)){
-                        end = true;
-                        break;
-                    }
-                    recv_q.enqueue(mes);
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(100)); //FIXME
             }

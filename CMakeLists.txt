@@ -12,7 +12,6 @@ find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system)
 
-
 include_directories(
     ${Boost_INCLUDE_DIR}
     )
@@ -24,7 +23,9 @@ set(SRC_SRV src/server/server.cpp
     src/server/client.cpp
     src/server/main.cpp)
 
-set(SRC_CLI src/client/client.cpp
+set(SRC_CLI 
+    src/client-core/client.cpp
+    src/client/client.cpp
     src/client/main.cpp
     src/client/ui.cpp
     third-party/imgui/imgui.cpp

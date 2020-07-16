@@ -27,7 +27,7 @@ int main(int argc, char* argv[]){
 */
 			using namespace boost::asio::ip;
 			tcp::endpoint endpoint(tcp::v4(), port);
-			server srv(io_service, endpoint);
+			net_send::server srv(io_service, endpoint);
             io_service.run();
 	} catch (std::exception& e) {
 		std::cerr << "Error: " << e.what() << "\n";

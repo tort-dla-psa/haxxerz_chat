@@ -23,6 +23,8 @@
 #include "semaphore.hpp"
 #include "datatypes.hpp"
 
+namespace net_send{
+
 class chat_participant;
 using chat_participant_ptr = std::shared_ptr<chat_participant>;
 class chat_session;
@@ -46,3 +48,5 @@ private:
     std::set<chat_participant_ptr> m_participants;
     chat_message_queue recent_msgs_;
 };
+
+}

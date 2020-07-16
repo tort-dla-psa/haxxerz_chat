@@ -5,9 +5,9 @@
 
 class ui{
 public:
-    using queue_t = moodycamel::BlockingReaderWriterQueue<message>;
+    using queue_t = moodycamel::BlockingReaderWriterQueue<std::string>;
 protected:
-    std::deque<message> m_msgs;
+    std::deque<std::string> m_msgs;
     queue_t m_read_q, m_write_q;
 public:
     virtual ~ui(){};

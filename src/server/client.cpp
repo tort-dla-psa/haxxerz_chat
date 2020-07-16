@@ -5,6 +5,8 @@
 #include <vector>
 #include <iostream>
 
+using namespace net_send;
+
 chat_session::chat_session(sock socket, server &srv_ref)
     :m_socket(std::move(socket)),
     m_srv_ref(srv_ref)

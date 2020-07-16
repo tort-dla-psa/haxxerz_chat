@@ -102,7 +102,7 @@ void ui_imgui::start(){
         static bool msg_sent;
         ImGui::Text("Time per frame %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         {
-            class message mes;
+            std::string mes;
             while(m_read_q.try_dequeue(mes)){
                 m_msgs.emplace_back(mes);
                 needs_scroll = true;
@@ -141,8 +141,8 @@ void ui_imgui::start(){
         }
 
         for(auto &mes:m_msgs){
-            auto str = mes.get_str();
-            ImGui::Text("Message:%s", str.c_str());
+            auto str = mes;
+            ImGui::Text("%s", str.c_str());
         }
         if(needs_scroll){
             ImGui::SetScrollHereY(1.f); // 0.0f:top, 0.5f:center, 1.0f:bottom
@@ -154,9 +154,7 @@ void ui_imgui::start(){
             ImGuiInputTextFlags_CtrlEnterForNewLine |
             ImGuiInputTextFlags_EnterReturnsTrue));
         if(msg_sent) {
-            class message mes;
-            mes.set_str(my_str);
-            m_write_q.enqueue(mes);
+            m_write_q.enqueue(my_str);
             my_str.clear();
         }
         ImGui::End();

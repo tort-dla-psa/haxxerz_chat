@@ -13,6 +13,7 @@
 #include "chatlib.h"
 
 
+using namespace net_send;
 namespace asio_ns = boost::asio;
 using tcp_ns = server::tcp_ns;
 

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-enum class role{admin, user, muted, banned};
+namespace net_send{
 
 class message{
 public:
@@ -45,4 +45,6 @@ public:
     }
 protected:
     std::string m_data;
+};
+
 };
