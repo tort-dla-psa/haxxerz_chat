@@ -2,8 +2,7 @@
 #include <sys/socket.h>
 #include <thread>
 #include <iostream>
-#include "chatlib.h"
-#include "client-core/client.h"
+#include "core/client/client.h"
 
 using namespace net_send;
 using chat_mes_queue = client::chat_mes_queue;

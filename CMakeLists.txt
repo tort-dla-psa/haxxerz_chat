@@ -17,17 +17,21 @@ include_directories(
     )
 
 include_directories(include
+    include/core
     third-party)
 
-set(SRC_SRV src/server/server.cpp
-    src/server/client.cpp
-    src/server/main.cpp)
+set(SRC_SRV 
+    src/core/server/server.cpp
+    src/core/server/client.cpp
+    example/src/server/chat_server.cpp
+    example/src/server/chat_client.cpp
+    example/src/server/main.cpp)
 
 set(SRC_CLI 
-    src/client-core/client.cpp
-    src/client/client.cpp
-    src/client/main.cpp
-    src/client/ui.cpp
+    src/core/client/client.cpp
+    example/src/client/chat_client.cpp
+    example/src/client/main.cpp
+    example/src/client/ui.cpp
     third-party/imgui/imgui.cpp
     third-party/imgui/imgui_draw.cpp
     third-party/imgui/imgui_widgets.cpp
@@ -37,12 +41,12 @@ set(SRC_CLI
 
 add_executable(server ${SRC_SRV})
 target_include_directories(server PRIVATE include
-    include/server
+    example/include/server
     ${Boost_INCLUDE_DIR})
 
 add_executable(client ${SRC_CLI})
 target_include_directories(client PRIVATE include
-    include/client
+    example/include/client
     third-party/imgui
     third-party/rwqueue
     third-party/imgui/examples

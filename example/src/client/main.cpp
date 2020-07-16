@@ -5,8 +5,7 @@
 #include <atomic>
 #include <iostream>
 
-#include "chatlib.h"
-#include "client.h"
+#include "chat_client.h"
 #include "ui.h"
 
 int main(int argc, char* argv[]){
