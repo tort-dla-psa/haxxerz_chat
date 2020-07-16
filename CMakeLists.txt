@@ -6,8 +6,6 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-set(CURSES_NEED_NCURSES TRUE)
-find_package(Curses REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -15,7 +13,7 @@ find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system)
 
 
-include_directories(${CURSES_INCLUDE_DIRS}
+include_directories(
     ${Boost_INCLUDE_DIR}
     )
 
@@ -54,11 +52,9 @@ target_include_directories(client PRIVATE include
     )
 
 target_link_libraries(server ${CMAKE_THREAD_LIBS_INIT}
-    ${CURSES_LIBRARIES}
     ${Boost_LIBRARIES}
     cryptopp)
 target_link_libraries(client ${CMAKE_THREAD_LIBS_INIT}
-    ${CURSES_LIBRARIES}
     ${Boost_LIBRARIES}
     ${GLEW_LIBRARIES}
     ${OPENGL_LIBRARIES}
