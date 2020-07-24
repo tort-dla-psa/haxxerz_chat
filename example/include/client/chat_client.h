@@ -1,4 +1,5 @@
 #include "core/client/client.h"
+#include "encrypt_engine/enc_eng.h"
 #include "readerwriterqueue.h"
 
 namespace net_send{
@@ -16,6 +17,7 @@ public:
     void on_disconnected()override;
 private:
     ui_queue &m_mes_q;
+    enc_eng m_enc_eng;
 };
 
 };
