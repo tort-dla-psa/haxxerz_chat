@@ -10,10 +10,17 @@ using chat_mes_queue = client::chat_mes_queue;
 chat_client::chat_client(ui_queue &mes_q, io_service& io_service, resolve_it endpoint)
     :client(io_service, endpoint),
     m_mes_q(mes_q)
-{ }
+{
+    m_got_bobs_pubkey = false;
+}
 
 void chat_client::on_recv(message &mes){
-    auto ui_mes = "RECV:"+std::move(mes.get_str());
+    if(!m_got_bobs_pubkey){
+        m_got_bobs_pubkey = true;
+        //auto str = mes.get_str();
+        //m_enc_eng.set_bobs_pub_key(str);
+    }
+    auto ui_mes = "RECV:"+mes.get_str();
     m_mes_q.emplace(std::move(ui_mes));
 }
 void chat_client::on_send(message &mes){

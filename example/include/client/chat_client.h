@@ -1,5 +1,5 @@
 #include "core/client/client.h"
-#include "encrypt_engine/enc_eng.h"
+//#include "encrypt_engine/enc_eng.h"
 #include "readerwriterqueue.h"
 
 namespace net_send{
@@ -16,8 +16,9 @@ public:
     void on_connected()override;
     void on_disconnected()override;
 private:
+    bool m_got_bobs_pubkey;
     ui_queue &m_mes_q;
-    enc_eng m_enc_eng;
+    //enc_eng m_enc_eng;
 };
 
 };

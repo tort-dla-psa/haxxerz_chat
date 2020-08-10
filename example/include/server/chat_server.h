@@ -1,7 +1,6 @@
 #pragma once
 #include "core/server/server.h"
 #include "chat_client.h"
-#include "encrypt_engine/enc_eng.h"
 
 namespace net_send{
 
@@ -17,7 +16,6 @@ public:
     void on_recv(client_ptr sess, const message &msg)override;
 private:
     chat_message_queue m_recent_msgs_;
-    enc_eng m_enc_eng;
 };
 
 };

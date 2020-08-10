@@ -16,23 +16,23 @@ include_directories(
     ${Boost_INCLUDE_DIR}
     )
 
-execute_process (
-    COMMAND bash -c "wget -O CMakeLists.txt https://raw.githubusercontent.com/noloader/cryptopp-cmake/master/CMakeLists.txt &&
-        wget -O cryptopp-config.cmake https://raw.githubusercontent.com/noloader/cryptopp-cmake/master/cryptopp-config.cmake
-        "
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third-party/cryptopp
-    OUTPUT_VARIABLE wget_success
-)
+# execute_process (
+#     COMMAND bash -c "wget -O CMakeLists.txt https://raw.githubusercontent.com/noloader/cryptopp-cmake/master/CMakeLists.txt &&
+#         wget -O cryptopp-config.cmake https://raw.githubusercontent.com/noloader/cryptopp-cmake/master/cryptopp-config.cmake
+#         "
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third-party/cryptopp
+#     OUTPUT_VARIABLE wget_success
+# )
 
-set(BUILD_TESTING OFF CACHE BOOL "enable cryptopp tests" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third-party/cryptopp)
+# set(BUILD_TESTING OFF CACHE BOOL "enable cryptopp tests" FORCE)
+# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third-party/cryptopp)
 
 include_directories(include
     include/core
     third-party)
 
 set(SRC_ENC 
-    example/src/encrypt_engine/enc_eng.cpp
+    # example/src/encrypt_engine/enc_eng.cpp
     )
 
 set(SRC_SRV 
@@ -79,14 +79,12 @@ target_include_directories(client PRIVATE include
 
 target_link_libraries(server ${CMAKE_THREAD_LIBS_INIT}
     ${Boost_LIBRARIES}
-    cryptopp-shared
-    cryptopp
+#     cryptopp
     )
 target_link_libraries(client ${CMAKE_THREAD_LIBS_INIT}
     ${Boost_LIBRARIES}
     ${GLEW_LIBRARIES}
     ${OPENGL_LIBRARIES}
     ${SDL2_LIBRARIES}
-    cryptopp-shared
-    cryptopp
+#     cryptopp
     )
